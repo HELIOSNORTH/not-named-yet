@@ -1,9 +1,9 @@
 # content.ts — CVF (2026-10-13)
 
-- Single source for every visible string. The English copy is the owner's exact text; do not "improve" it.
-- `registration` keeps the literal `© 2026` from the supplied text. Change it deliberately; it is not computed.
-- Danish copy is our translation (needs owner review). `­` soft hyphens in long Danish compounds let the hero's
-  one-word-per-line stack break cleanly on phones without shrinking the type for every screen.
-- `headline` is `[sentence][word]`: Hero renders one word per line, Sheet flows words and lights them per index.
-  Sentence 2 is styled secondary in the hero; keep two sentences.
-- `localeFromPath` is shared by `hooks.server.ts` (sets `<html lang>` at prerender) and the layout (client nav).
+- Copy is taken verbatim from the previous live site (EN and its DA toggle), including `KONTAKT`, `Afspil film` and
+  `DANMARK`. Do not "improve" it. The DA meta description is ours; the previous site had no Danish one.
+- `wide` / `narrow` are the previous site's line breaks (desktop vs ≤759 px). `secondSentenceLine` gets the small
+  extra gap before "Scandinavian".
+- `film.horizonY` is the fjord/skyline line as a fraction of the portrait frame height. `startAt: 4` makes Bølgen
+  (it enters at about 8 s) appear right as the intro wipe clears the glass.
+- `registration` keeps the literal `© 2026`.

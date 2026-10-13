@@ -1,17 +1,91 @@
 <!doctype html>
-<html lang="%lang%">
+<html lang="%lang%" data-hartmann-entrance="waiting">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-		<meta name="text-scale" content="scale" />
-		<meta name="color-scheme" content="light dark" />
-		<meta name="theme-color" content="#050608" />
-		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
-		<link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
-		<link rel="preconnect" href="https://video.hartmannsoft.com" />
+		<meta name="color-scheme" content="light" />
+		<meta name="theme-color" content="#EFEBE4" />
+		<link rel="icon" type="image/png" sizes="192x192" href="%sveltekit.assets%/favicon.png" />
+		<link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/apple-touch-icon.png" />
+		<link rel="preconnect" href="https://video.hartmannsoft.com" crossorigin="anonymous" />
+		<link
+			rel="preload"
+			as="image"
+			href="%sveltekit.assets%/media/images/helios-north-hero-poster.jpg"
+			fetchpriority="high"
+			crossorigin="anonymous"
+		/>
+		<style>
+			#hartmann-loading {
+				display: none;
+			}
+			html[data-hartmann-entrance='waiting'] #hartmann-loading {
+				position: fixed;
+				inset: 0;
+				z-index: 100;
+				display: grid;
+				place-items: center;
+				background: #efebe4;
+				color: #1b1a18;
+				pointer-events: none;
+				animation: hartmann-veil 1.5s both;
+			}
+			#hartmann-loading span {
+				font:
+					400 clamp(20px, 4vw, 32px) / 1.2 ui-serif,
+					'Iowan Old Style',
+					Georgia,
+					serif;
+				letter-spacing: 0.3em;
+				padding-left: 0.3em;
+				animation: hartmann-signature 1.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+			}
+			@keyframes hartmann-signature {
+				0% {
+					opacity: 0;
+					transform: translateY(8px);
+					filter: blur(5px);
+				}
+				40%,
+				72% {
+					opacity: 1;
+					transform: none;
+					filter: blur(0);
+				}
+				100% {
+					opacity: 0;
+					transform: translateY(-4px);
+					filter: blur(0);
+				}
+			}
+			@keyframes hartmann-veil {
+				0%,
+				72% {
+					opacity: 1;
+				}
+				100% {
+					opacity: 0;
+					visibility: hidden;
+				}
+			}
+			@media (prefers-reduced-motion: reduce) {
+				html[data-hartmann-entrance='waiting'] #hartmann-loading,
+				#hartmann-loading span {
+					animation: none;
+				}
+			}
+		</style>
+		<script>
+			setTimeout(() => {
+				document.documentElement.dataset.hartmannEntrance = 'ready';
+				document.getElementById('hartmann-loading')?.remove();
+				window.dispatchEvent(new Event('hartmann:entrance'));
+			}, 1500);
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
+		<div id="hartmann-loading" aria-hidden="true"><span>HARTMANN</span></div>
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>

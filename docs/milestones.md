@@ -1,14 +1,17 @@
 # Milestones
 
-## M1 — Launch-ready single page (2026-10-13) ✅
+## M1 — First single-page version (2026-10-13) ✅ superseded
 
-- SvelteKit 3 static site, EN `/` + DA `/da/`, prerendered with correct `<html lang>`, hreflang, canonical, OG.
-- Hero video, Liquid Glass header, sheet transition, scroll-read statement, video-filled wordmark, contact, legal.
-- Light/dark, reduced motion, WCAG pause control for the autoplaying video, 44 px touch targets.
-- Verified in headless Chromium at 1440×900 and 390×844, light and dark, with a stand-in video.
+Sans-serif Liquid Glass design. Replaced by M2 after owner feedback: keep the previous site's identity and rethink only
+the first section.
+
+## M2 — "The Window" hero on the original identity (2026-10-13) ✅
+
+- Header, loading veil, grain, fonts, palette and the sunlight contact section ported 1:1 from the live site.
+- New hero: WebGL2 fogged-glass over the Vejle film, auto-wipe intro, pointer/touch wiping, scroll-driven window
+  roll-down with a glint edge. Falls back to CSS frost without WebGL2, and to a static view with reduced motion.
+- HLS with resolution capped to what the screen needs; MP4 fallback.
 
 ## Next (only when needed)
 
-- Verify on the real hero video (Safari iOS + macOS, Chrome) and tune `.scrim` strength.
-- Poster frame for the video (first frame as AVIF/JPEG) to remove the gradient-to-video fade on slow networks.
-- Owner review of the Danish copy.
+- Check on real devices (iPhone Safari, Android Chrome, macOS Safari) and tune fog density and wipe radius.

@@ -1,12 +1,16 @@
 # Hero.svelte — CVF (2026-10-13)
 
-- The hero is `position: sticky` so the sheet slides over it. The stage is scaled from the top edge, which makes it read
-  as the iOS card-behind-sheet effect.
-- `autoplay muted playsinline` must stay as HTML attributes (prerendered) or iOS will not autoplay. Effects then pause the
-  video when the user pauses, when the sheet fully covers the hero, or when reduced motion is on.
-- The pause button is required, not decoration: WCAG 2.2.2 requires a pause control for auto-playing motion longer than 5 s.
-- `.scrim` gradients are tuned blind (real footage was unreachable during the build). They guarantee contrast for
-  white type at the bottom-left; soften them once seen on the real video.
-- The intro waits ≈0.55 s for the video fade before the words rise. `introDone` flips after the intro has finished,
-  so a language switch replays the reveal without the delay. Flipping it earlier would change `animation-delay`
-  mid-animation and make the text jump.
+- The film is portrait 9:16 (2160×3840). `frameFilm` covers the viewport and, on landscape screens, shifts the crop so
+  the horizon (`film.horizonY` ≈ 0.715 of frame height: fjord, skyline, Bølgen) lands near 31 % from the top. Phones
+  show the full frame (no vertical slack), so the horizon sits low; then `data-layout="above"` moves the headline up
+  over the foggy sky.
+- The auto-wipe stripe follows the computed horizon, so the first clear view is always Bølgen.
+- Scroll: section is 260lvh with a sticky stage. 4–62 % of travel rolls the glass edge from top to past the bottom;
+  the headline fades during the first 20 %. The glass loop stops once the edge has passed (`edge ≥ 1.02`) and while the
+  section is off-screen.
+- The effect must not read `$state` synchronously (it would re-run, destroy the WebGL context and fail on the lost
+  context). Keep internal values in local variables and only write state.
+- `.frost` is the pre-hydration and no-WebGL2 fallback (CSS backdrop blur with a clear band). It hides once the glass
+  is running.
+- Touch uses `touchmove`, not pointer events. With `touch-action: pan-y` the browser cancels pointer events as soon as
+  scrolling starts, so pointer events would stop wiping mid-swipe.

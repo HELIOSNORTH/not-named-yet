@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { localePaths, type Copy, type Locale } from '#lib/content.ts';
 
-	let { copy, locale, tone }: { copy: Copy; locale: Locale; tone: 'night' | 'paper' } = $props();
+	let { copy, locale }: { copy: Copy; locale: Locale } = $props();
 
 	const languages: { code: Locale; label: string }[] = [
 		{ code: 'en', label: 'EN' },
@@ -10,76 +10,87 @@
 </script>
 
 <header class="header">
-	<a class="glass monogram" data-tone={tone} href="#top" aria-label={copy.homeLabel}>H</a>
-
-	<div class="actions">
-		<nav class="glass languages" data-tone={tone} aria-label={copy.languageLabel}>
+	<a class="monogram" href="#top" aria-label={copy.homeLabel}>H</a>
+	<nav class="nav" aria-label="Primary">
+		<div class="languages" role="group" aria-label={copy.languageLabel}>
 			{#each languages as language, index (language.code)}
-				{#if index > 0}<span class="separator" aria-hidden="true">·</span>{/if}
+				{#if index > 0}<i aria-hidden="true">·</i>{/if}
 				<a
 					href={localePaths[language.code]}
 					hreflang={language.code}
-					lang={language.code}
 					aria-current={language.code === locale ? 'true' : undefined}
 					data-sveltekit-noscroll
 					data-sveltekit-replacestate>{language.label}</a
 				>
 			{/each}
-		</nav>
-		<a class="glass consult caps" data-tone={tone} href="#contact">{copy.consult}</a>
-	</div>
+		</div>
+		<a class="consult" href="#correspondence"><span>{copy.consult}</span></a>
+	</nav>
 </header>
 
 <style>
 	.header {
 		position: fixed;
-		inset-inline: 0;
 		top: 0;
-		z-index: 50;
+		left: 0;
+		right: 0;
+		z-index: 60;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.75rem;
-		padding: var(--header-top) var(--gutter) 0;
+		padding: var(--header-pad) var(--gutter);
+		color: #fff;
+		mix-blend-mode: difference;
 		pointer-events: none;
-		animation: header-in 1.4s var(--ease-out) 1.1s both;
 	}
 
-	.header > :global(*) {
+	.header a {
 		pointer-events: auto;
 	}
 
-	.monogram {
-		width: 2.75rem;
-		height: 2.75rem;
-		border-radius: 0.95rem;
-		font-size: 1.1875rem;
-		font-weight: 700;
-		letter-spacing: -0.02em;
+	:global(html[data-hartmann-entrance='waiting']) .header {
+		opacity: 0;
 	}
 
-	.actions {
+	:global(html[data-hartmann-entrance='ready']) .header {
+		animation: header-in 1.6s var(--ease-out) both;
+	}
+
+	@keyframes header-in {
+		from {
+			opacity: 0;
+		}
+	}
+
+	.monogram {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		justify-content: center;
+		width: 36px;
+		height: 38px;
+		font: 400 32px/1 var(--serif);
+	}
+
+	.nav {
+		display: flex;
+		align-items: center;
+		gap: clamp(18px, 2.8vw, 42px);
+		font-size: 11px;
+		font-weight: 500;
+		letter-spacing: 0.2em;
+		text-transform: uppercase;
 	}
 
 	.languages {
-		gap: 0.125rem;
-		padding-inline: 0.375rem;
-		font-size: 0.75rem;
-		font-weight: 600;
-		letter-spacing: 0.14em;
+		display: flex;
+		align-items: center;
+		gap: 0.75em;
 	}
 
 	.languages a {
-		display: grid;
-		place-items: center;
-		min-width: 2.25rem;
-		min-height: 2.75rem;
-		padding-left: 0.14em;
-		opacity: 0.5;
-		transition: opacity 0.4s var(--ease-out);
+		padding: 6px 0;
+		opacity: 0.45;
+		transition: opacity 0.4s;
 	}
 
 	.languages a:hover,
@@ -87,25 +98,39 @@
 		opacity: 1;
 	}
 
-	.separator {
+	.languages i {
+		font-style: normal;
 		opacity: 0.45;
 	}
 
 	.consult {
-		padding-inline: 1.25rem 1.1rem;
-		letter-spacing: 0.2em;
+		position: relative;
+		isolation: isolate;
+		display: inline-flex;
+		align-items: center;
+		height: 38px;
+		padding: 0 19px 0 calc(0.2em + 19px);
+		overflow: hidden;
+		border: 1px solid;
+		border-radius: 99px;
+		transition: color 0.6s var(--ease-out);
 	}
 
-	@keyframes header-in {
-		from {
-			opacity: 0;
-			transform: translateY(-0.75rem);
-		}
+	.consult::before {
+		content: '';
+		position: absolute;
+		inset: -1px;
+		z-index: -1;
+		background: #fff;
+		transform: translateY(102%);
+		transition: transform 0.7s var(--ease-out);
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.header {
-			animation: none;
-		}
+	.consult:hover {
+		color: #000;
+	}
+
+	.consult:hover::before {
+		transform: none;
 	}
 </style>

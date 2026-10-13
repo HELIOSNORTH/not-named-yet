@@ -1,42 +1,154 @@
 <script lang="ts">
-	import { brand, heroVideoUrl, type Copy, type Locale } from '#lib/content.ts';
+	import { brand, film, type Copy, type Locale } from '#lib/content.ts';
+	import { createGlass, type Glass } from '#lib/glass/glass.ts';
+	import { frameFilm } from '#lib/glass/framing.ts';
+	import { attachFilm } from '#lib/glass/film.ts';
 
-	let { copy, locale, covered }: { copy: Copy; locale: Locale; covered: boolean } = $props();
+	let { copy, locale }: { copy: Copy; locale: Locale } = $props();
 
+	let section = $state<HTMLElement>();
+	let stage = $state<HTMLElement>();
 	let video = $state<HTMLVideoElement>();
-	let visible = $state(false);
-	let playing = $state(false);
-	let userPaused = $state(false);
-	let introDone = $state(false);
+	let canvas = $state<HTMLCanvasElement>();
 
-	const lines = $derived(
-		copy.headline.flatMap((sentence, s) => sentence.map((word) => ({ word, s })))
-	);
+	let glassReady = $state(false);
+	let blocked = $state(false);
+	let positionY = $state(0.9);
+	let horizon = $state(0.33);
+	let progress = $state(0);
 
-	$effect(() => {
-		userPaused = matchMedia('(prefers-reduced-motion: reduce)').matches;
-	});
+	const layout = $derived(horizon > 0.55 ? 'above' : 'below');
+	const textOut = $derived(Math.min(1, progress / 0.2));
 
-	$effect(() => {
-		if (!video) return;
-		if (userPaused || covered) video.pause();
-		else video.play().catch(() => (playing = false));
-	});
+	const wordIndex = (lines: Copy['wide'], line: number, word: number) =>
+		lines.slice(0, line).reduce((sum, l) => sum + l.length, 0) + word;
 
 	$effect(() => {
-		const timer = setTimeout(() => (introDone = true), 2600);
-		return () => clearTimeout(timer);
+		if (!section || !stage || !video || !canvas) return;
+		const sectionEl = section;
+		const stageEl = stage;
+		const videoEl = video;
+		const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+		const poster = new Image();
+		poster.crossOrigin = 'anonymous';
+		poster.src = film.poster;
+
+		const glass: Glass | null = createGlass(canvas, { video: videoEl, poster });
+		glassReady = !!glass;
+
+		const play = () => {
+			if (still) return;
+			videoEl.play().then(
+				() => (blocked = false),
+				(error: DOMException) => {
+					if (error.name === 'NotAllowedError') blocked = true;
+				}
+			);
+		};
+		const detachFilm = attachFilm(videoEl, play);
+		if (still) blocked = true;
+
+		let visible = true;
+		let edge = 0;
+		let horizonY = 0.33;
+
+		const layoutFilm = () => {
+			const width = stageEl.clientWidth;
+			const height = stageEl.clientHeight;
+			const target = width / height > 1 ? 0.31 : 0.4;
+			const frame = frameFilm(width, height, film, target);
+			positionY = frame.positionY;
+			horizon = horizonY = frame.horizon;
+			glass?.resize(width, height, frame.framing);
+		};
+
+		const syncLoop = () => {
+			if (!glass) return;
+			if (visible && edge < 1.02) glass.start();
+			else glass.stop();
+		};
+
+		const measure = () => {
+			const rect = sectionEl.getBoundingClientRect();
+			const travel = Math.max(1, rect.height - innerHeight);
+			const scrolled = Math.min(1, Math.max(0, -rect.top / travel));
+			progress = scrolled;
+			const roll = Math.min(1, Math.max(0, (scrolled - 0.04) / 0.58));
+			edge = (roll < 0.5 ? 2 * roll * roll : 1 - Math.pow(-2 * roll + 2, 2) / 2) * 1.08;
+			glass?.setEdge(edge);
+			syncLoop();
+		};
+
+		const entrance = () => {
+			if (!glass) return;
+			glass.beginIntro(still);
+			if (still) glass.clearBand(horizonY);
+			else setTimeout(() => glass.autoWipe(horizonY, 1700), 700);
+		};
+
+		layoutFilm();
+		measure();
+		if (document.documentElement.dataset.hartmannEntrance === 'ready') entrance();
+		else addEventListener('hartmann:entrance', entrance, { once: true });
+
+		let frame = 0;
+		const onScroll = () => {
+			frame ||= requestAnimationFrame(() => {
+				frame = 0;
+				measure();
+			});
+		};
+		const onResize = () => {
+			layoutFilm();
+			measure();
+		};
+		const wipeAt = (x: number, y: number) => {
+			if (!glass || edge >= 1.02) return;
+			glass.wipe(x, y - stageEl.getBoundingClientRect().top);
+		};
+		const onPointer = (event: PointerEvent) => {
+			if (event.pointerType !== 'touch') wipeAt(event.clientX, event.clientY);
+		};
+		const onTouch = (event: TouchEvent) => {
+			for (const touch of event.touches) wipeAt(touch.clientX, touch.clientY);
+		};
+
+		const observer = new IntersectionObserver(([entry]) => {
+			visible = entry.isIntersecting;
+			if (visible) play();
+			else videoEl.pause();
+			syncLoop();
+		});
+		observer.observe(sectionEl);
+
+		addEventListener('scroll', onScroll, { passive: true });
+		addEventListener('resize', onResize, { passive: true });
+		stageEl.addEventListener('pointermove', onPointer, { passive: true });
+		stageEl.addEventListener('touchmove', onTouch, { passive: true });
+		stageEl.addEventListener('touchstart', onTouch, { passive: true });
+
+		return () => {
+			cancelAnimationFrame(frame);
+			observer.disconnect();
+			removeEventListener('scroll', onScroll);
+			removeEventListener('resize', onResize);
+			removeEventListener('hartmann:entrance', entrance);
+			stageEl.removeEventListener('pointermove', onPointer);
+			stageEl.removeEventListener('touchmove', onTouch);
+			stageEl.removeEventListener('touchstart', onTouch);
+			detachFilm();
+			glass?.destroy();
+		};
 	});
 </script>
 
-<section id="top" class="hero" aria-labelledby="hero-title">
-	<div class="stage">
-		<div class="backdrop" aria-hidden="true"></div>
+<section bind:this={section} class="hero" id="top" aria-label="Hartmann Software">
+	<div bind:this={stage} class="stage" data-layout={layout} style:--horizon={horizon}>
 		<video
 			bind:this={video}
-			class:visible
-			src={heroVideoUrl}
-			autoplay
+			class="film"
+			poster={film.poster}
+			crossorigin="anonymous"
 			muted
 			loop
 			playsinline
@@ -45,242 +157,266 @@
 			disableremoteplayback
 			aria-hidden="true"
 			tabindex="-1"
-			onloadeddata={() => (visible = true)}
-			onplaying={() => ((visible = true), (playing = true))}
-			onpause={() => (playing = false)}
+			style:object-position="50% {positionY * 100}%"
 		></video>
-		<div class="scrim" aria-hidden="true"></div>
-		<div class="grain" aria-hidden="true"></div>
-		<div class="dim" aria-hidden="true"></div>
+		<div class="frost" class:hidden={glassReady} aria-hidden="true"></div>
+		<canvas bind:this={canvas} class="glass" aria-hidden="true"></canvas>
 
-		<div class="content">
+		<div class="frame" style:opacity={1 - textOut} style:translate="0 {textOut * -36}px">
 			{#key locale}
-				<h1 id="hero-title" class="headline" class:replayed={introDone}>
-					{#each lines as line, index (index)}
-						<span class="mask">
-							<span class="line" class:muted={line.s === 1} style:--i={index}>{line.word}</span>
-						</span>{' '}
+				<h1 class="headline" aria-label={copy.headline}>
+					{#each [{ lines: copy.wide, variant: 'wide' as const }, { lines: copy.narrow, variant: 'narrow' as const }] as { lines, variant } (variant)}
+						<span class="variant {variant}" aria-hidden="true">
+							{#each lines as line, l (l)}
+								<span class="line" class:second={l === copy.secondSentenceLine[variant]}>
+									{#each line as word, i (i)}
+										<span class="mask" class:italic={word.italic}
+											><span class="word" style:--i={wordIndex(lines, l, i)}>{word.text}</span
+											></span
+										>
+									{/each}
+								</span>
+							{/each}
+						</span>
 					{/each}
 				</h1>
 			{/key}
 
-			<div class="footer">
-				<p class="lockup">
-					<span class="brand">{brand}</span>
-					<span class="caps discipline">{copy.discipline}</span>
-				</p>
-				<button
-					type="button"
-					class="glass toggle"
-					aria-label={playing ? copy.pauseVideo : copy.playVideo}
-					onclick={() => (userPaused = playing)}
-				>
-					<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-						{#if playing}
-							<rect x="3.5" y="2.5" width="3" height="11" rx="1" />
-							<rect x="9.5" y="2.5" width="3" height="11" rx="1" />
-						{:else}
-							<path
-								d="M4.5 3.2v9.6a1 1 0 0 0 1.52.85l7.7-4.8a1 1 0 0 0 0-1.7l-7.7-4.8A1 1 0 0 0 4.5 3.2Z"
-							/>
-						{/if}
-					</svg>
-				</button>
+			<div class="lockup label">
+				<div class="name">
+					<b>{brand}</b>
+					<span>{copy.discipline}</span>
+				</div>
+				<span class="scroll-line" aria-hidden="true"></span>
 			</div>
 		</div>
+
+		{#if blocked}
+			<button class="play" type="button" onclick={() => video?.play().then(() => (blocked = false))}
+				>{copy.playFilm}</button
+			>
+		{/if}
 	</div>
 </section>
 
 <style>
 	.hero {
-		position: sticky;
-		top: 0;
-		height: 100svh;
-		min-height: 34rem;
-		background: #000;
-		color: #fff;
+		position: relative;
+		height: 260lvh;
 	}
 
 	.stage {
-		position: absolute;
-		inset: 0;
+		position: sticky;
+		top: 0;
+		height: 100lvh;
 		overflow: hidden;
-		transform-origin: 50% 0%;
-		transform: scale(calc(1 - var(--cover, 0) * 0.07));
-		border-radius: calc(var(--cover, 0) * 2.5rem);
-		will-change: transform;
+		background: var(--paper);
+		touch-action: pan-y;
 	}
 
-	.backdrop,
-	video,
-	.scrim,
-	.grain,
-	.dim {
+	.film,
+	.frost,
+	.glass {
 		position: absolute;
 		inset: 0;
 		width: 100%;
 		height: 100%;
 	}
 
-	.backdrop {
-		background:
-			radial-gradient(70% 55% at 72% 32%, rgb(74 116 168 / 0.5), transparent 70%),
-			radial-gradient(55% 45% at 18% 85%, rgb(196 142 92 / 0.22), transparent 70%),
-			linear-gradient(180deg, #0b1220 0%, #05070b 100%);
-	}
-
-	video {
+	.film {
 		object-fit: cover;
-		opacity: 0;
-		transform: scale(1.08);
-		transition:
-			opacity 1.8s var(--ease-out),
-			transform 3.2s var(--ease-out);
+		background: var(--paper);
 	}
 
-	video.visible {
-		opacity: 1;
-		transform: scale(1);
+	.frost {
+		--band: calc(var(--horizon) * 100%);
+		background: rgb(239 235 228 / 0.55);
+		-webkit-backdrop-filter: blur(18px) saturate(0.9);
+		backdrop-filter: blur(18px) saturate(0.9);
+		mask-image: linear-gradient(
+			#000 calc(var(--band) - 16%),
+			transparent calc(var(--band) - 7%),
+			transparent calc(var(--band) + 7%),
+			#000 calc(var(--band) + 16%)
+		);
 	}
 
-	.scrim {
-		background:
-			linear-gradient(0deg, rgb(0 0 0 / 0.78) 0%, rgb(0 0 0 / 0.32) 34%, rgb(0 0 0 / 0) 62%),
-			linear-gradient(90deg, rgb(0 0 0 / 0.42) 0%, rgb(0 0 0 / 0) 58%),
-			linear-gradient(180deg, rgb(0 0 0 / 0.42) 0%, rgb(0 0 0 / 0) 20%);
+	.frost.hidden {
+		display: none;
 	}
 
-	.grain {
-		opacity: 0.09;
-		mix-blend-mode: overlay;
-		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-	}
-
-	.dim {
-		background: #000;
-		opacity: calc(var(--cover, 0) * 0.55);
+	.frame {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		grid-template-rows: 1fr auto auto;
+		padding: 0 var(--gutter) clamp(20px, 3vw, 38px);
 		pointer-events: none;
 	}
 
-	.content {
-		position: absolute;
-		inset: 0;
-		display: flex;
-		flex-direction: column;
-		justify-content: flex-end;
-		padding: calc(var(--header-top) + 5rem) var(--gutter)
-			max(env(safe-area-inset-bottom), clamp(1.25rem, 3.5vw, 2.75rem));
-		transform: translateY(calc(var(--cover, 0) * -6svh));
-		opacity: calc(1 - var(--cover, 0) * 1.4);
+	[data-layout='above'] .frame {
+		grid-template-rows: auto 1fr auto;
+		padding-top: calc(var(--header-pad) * 2 + 38px + 3vh);
 	}
 
 	.headline {
-		display: flex;
-		flex-direction: column;
-		font-size: min(9.6svh, 12.6vw, 8.5rem);
-		font-weight: 600;
-		line-height: 0.93;
-		letter-spacing: -0.045em;
-		hyphens: manual;
-		overflow-wrap: break-word;
-		text-shadow: 0 2px 40px rgb(0 0 0 / 0.25);
+		grid-row: 2;
+		margin-bottom: clamp(34px, 8.5vh, 110px);
+		font: 400 clamp(40px, 6.6vw, 118px) / 1.02 var(--serif);
+		letter-spacing: -0.014em;
 	}
 
-	.mask {
+	[data-layout='above'] .headline {
+		grid-row: 1;
+		margin-bottom: 0;
+	}
+
+	.variant {
 		display: block;
-		overflow: clip;
-		padding: 0.04em 0.06em 0.1em 0;
-		margin-bottom: -0.1em;
+	}
+
+	.narrow {
+		display: none;
 	}
 
 	.line {
-		display: block;
-		animation: rise 1.5s var(--ease-out) both;
-		animation-delay: calc(0.55s + var(--i) * 85ms);
-	}
-
-	.replayed .line {
-		animation-delay: calc(var(--i) * 60ms);
-	}
-
-	.line.muted {
-		color: rgb(255 255 255 / 0.56);
-	}
-
-	.footer {
 		display: flex;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: 1.5rem;
-		margin-top: clamp(1.75rem, 5svh, 3.5rem);
-		padding-top: clamp(1rem, 2.4svh, 1.5rem);
-		border-top: 0.5px solid rgb(255 255 255 / 0.22);
-		animation: fade-up 1.4s var(--ease-out) 1.35s both;
+		gap: 0.25em;
+		width: max-content;
+		white-space: nowrap;
+	}
+
+	.line.second {
+		margin-top: 0.14em;
+	}
+
+	.mask {
+		display: inline-block;
+		margin: -0.14em -0.1em -0.2em;
+		padding: 0.14em 0.1em 0.2em;
+		overflow: hidden;
+		vertical-align: top;
+	}
+
+	.mask.italic {
+		font-style: italic;
+	}
+
+	.word {
+		display: inline-block;
+		transform: translateY(135%);
+	}
+
+	:global(html[data-hartmann-entrance='ready']) .word {
+		transform: none;
+		transition: transform 1.5s var(--ease-out) calc(var(--i) * 60ms + 0.1s);
 	}
 
 	.lockup {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
+		grid-row: 3;
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
+		align-items: end;
+		opacity: 0;
+		transition: opacity 1.4s var(--ease-out) 0.5s;
 	}
 
-	.brand {
-		font-size: clamp(1.375rem, 2.2vw, 1.75rem);
-		font-weight: 700;
-		letter-spacing: -0.035em;
-		line-height: 1;
+	:global(html[data-hartmann-entrance='ready']) .lockup {
+		opacity: 1;
 	}
 
-	.discipline {
-		color: rgb(255 255 255 / 0.68);
+	.name b {
+		display: block;
+		margin-bottom: 0.5em;
+		font: 400 clamp(22px, 1.85vw, 28px) / 1 var(--serif);
+		letter-spacing: -0.005em;
+		text-transform: none;
 	}
 
-	@media (max-width: 30rem) {
-		.discipline {
-			letter-spacing: 0.14em;
+	.name span {
+		opacity: 0.6;
+	}
+
+	.scroll-line {
+		position: relative;
+		justify-self: center;
+		width: 1px;
+		height: 48px;
+		overflow: hidden;
+	}
+
+	.scroll-line::before,
+	.scroll-line::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		width: 1px;
+		background: currentColor;
+	}
+
+	.scroll-line::before {
+		top: 0;
+		height: 100%;
+		opacity: 0.18;
+	}
+
+	.scroll-line::after {
+		top: -40%;
+		height: 40%;
+		animation: scroll-cue 2.6s var(--ease-in-out) infinite;
+	}
+
+	@keyframes scroll-cue {
+		to {
+			transform: translateY(350%);
 		}
 	}
 
-	.toggle {
-		flex: none;
+	.play {
+		position: absolute;
+		right: var(--gutter);
+		bottom: 90px;
+		z-index: 8;
+		padding: 10px 16px;
+		border: 1px solid;
+		border-radius: 99px;
+		background: var(--paper);
+		color: var(--ink);
+		font-size: 11px;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		cursor: pointer;
 	}
 
-	.toggle svg {
-		fill: currentColor;
-	}
-
-	@keyframes rise {
-		from {
-			transform: translate3d(0, 108%, 0);
-			opacity: 0;
-			filter: blur(10px);
+	@media (width <= 759px) {
+		.wide {
+			display: none;
 		}
-		60% {
-			filter: blur(0);
-		}
-	}
 
-	@keyframes fade-up {
-		from {
-			opacity: 0;
-			transform: translateY(0.75rem);
+		.narrow {
+			display: block;
+		}
+
+		.headline {
+			font-size: clamp(40px, 11.2vw, 64px);
+		}
+
+		.lockup {
+			grid-template-columns: 1fr auto;
+		}
+
+		.scroll-line {
+			justify-self: end;
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.stage,
-		.content {
+		.word {
 			transform: none;
 		}
 
-		.line,
-		.footer {
-			animation: none;
-		}
-
-		video {
-			transform: none;
-			transition: opacity 0.6s linear;
+		.lockup {
+			opacity: 1;
 		}
 	}
 </style>

@@ -1,60 +1,28 @@
 <script lang="ts">
 	import { content, type Locale } from '#lib/content.ts';
+	import Correspondence from './Correspondence.svelte';
 	import Header from './Header.svelte';
 	import Hero from './Hero.svelte';
-	import Sheet from './Sheet.svelte';
 
 	let { locale }: { locale: Locale } = $props();
 
 	const copy = $derived(content[locale]);
-
-	let sheet = $state<HTMLElement>();
-	let reading = $state<HTMLElement>();
-	let cover = $state(0);
-	let read = $state(0);
-	let tone = $state<'night' | 'paper'>('night');
-
-	const clampUnit = (value: number) => Math.min(1, Math.max(0, value));
-
-	$effect(() => {
-		if (!sheet || !reading) return;
-		const sheetEl = sheet;
-		const readingEl = reading;
-		let frame = 0;
-
-		const measure = () => {
-			frame = 0;
-			const viewport = window.innerHeight;
-			const sheetTop = sheetEl.getBoundingClientRect().top;
-			cover = clampUnit(1 - sheetTop / viewport);
-			tone = sheetTop <= 52 ? 'paper' : 'night';
-			const { top, height } = readingEl.getBoundingClientRect();
-			read = clampUnit((viewport * 0.6 - top) / Math.max(1, height - viewport * 0.4));
-		};
-		const schedule = () => {
-			frame ||= requestAnimationFrame(measure);
-		};
-
-		measure();
-		addEventListener('scroll', schedule, { passive: true });
-		addEventListener('resize', schedule, { passive: true });
-		return () => {
-			cancelAnimationFrame(frame);
-			removeEventListener('scroll', schedule);
-			removeEventListener('resize', schedule);
-		};
-	});
 </script>
 
-<div class="site" style:--cover={cover} style:--read={read}>
-	<Header {copy} {locale} {tone} />
-	<Hero {copy} {locale} covered={cover >= 0.995} />
-	<Sheet {copy} bind:sheet bind:reading />
-</div>
+<div class="grain" aria-hidden="true"></div>
+<Header {copy} {locale} />
+<main>
+	<Hero {copy} {locale} />
+	<Correspondence {copy} />
+</main>
 
 <style>
-	.site {
-		position: relative;
-		overflow-x: clip;
+	.grain {
+		position: fixed;
+		inset: 0;
+		z-index: 90;
+		opacity: 0.06;
+		pointer-events: none;
+		background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 	}
 </style>

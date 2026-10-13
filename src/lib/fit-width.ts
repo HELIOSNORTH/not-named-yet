@@ -1,19 +1,20 @@
-export function fitWidth(box: HTMLElement) {
-	const text = box.firstElementChild as HTMLElement;
-	let lastWidth = 0;
-
-	const fit = (force = false) => {
-		const width = box.clientWidth;
-		if (!force && width === lastWidth) return;
-		lastWidth = width;
-		box.style.fontSize = '100px';
-		const ratio = text.getBoundingClientRect().width / 100;
-		box.style.fontSize = `${width / ratio}px`;
+export function fitWidth(maxPx: number) {
+	return (box: HTMLElement) => {
+		const text = box.firstElementChild as HTMLElement;
+		const container = box.parentElement!;
+		const fit = () => {
+			box.style.fontSize = '100px';
+			const ratio = text.getBoundingClientRect().width / 100;
+			const available =
+				container.clientWidth -
+				parseFloat(getComputedStyle(container).paddingLeft) -
+				parseFloat(getComputedStyle(container).paddingRight);
+			box.style.fontSize = `${Math.min(maxPx, available / ratio)}px`;
+		};
+		fit();
+		document.fonts.ready.then(fit);
+		const observer = new ResizeObserver(fit);
+		observer.observe(container);
+		return () => observer.disconnect();
 	};
-
-	fit(true);
-	document.fonts.ready.then(() => fit(true));
-	const observer = new ResizeObserver(() => fit());
-	observer.observe(box);
-	return () => observer.disconnect();
 }
