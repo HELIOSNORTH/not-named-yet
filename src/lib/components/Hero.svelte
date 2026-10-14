@@ -1,40 +1,45 @@
 <script lang="ts">
 	import { brand, film, type Copy, type Locale } from '#lib/content.ts';
-	import { createGlass, type Glass } from '#lib/glass/glass.ts';
-	import { frameFilm } from '#lib/glass/framing.ts';
-	import { attachFilm } from '#lib/glass/film.ts';
+	import { attachFilm } from '#lib/film/film.ts';
+	import { frameFilm } from '#lib/film/framing.ts';
 
 	let { copy, locale }: { copy: Copy; locale: Locale } = $props();
 
+	type Lines = Copy['wide'];
+
 	let section = $state<HTMLElement>();
 	let stage = $state<HTMLElement>();
+	let band = $state<HTMLElement>();
 	let video = $state<HTMLVideoElement>();
-	let canvas = $state<HTMLCanvasElement>();
 
-	let glassReady = $state(false);
 	let blocked = $state(false);
-	let positionY = $state(0.9);
-	let horizon = $state(0.33);
-	let progress = $state(0);
+	let positionY = $state(0.82);
+	let geometry = $state<{
+		top: number;
+		bottom: number;
+		line: number;
+		height: number;
+		horizon: number;
+	}>();
+	let expand = $state(0);
 
-	const layout = $derived(horizon > 0.55 ? 'above' : 'below');
-	const textOut = $derived(Math.min(1, progress / 0.2));
+	const split = (lines: Lines, at: number) => ({
+		inside: lines.slice(0, at),
+		outside: lines.slice(at)
+	});
+	const wide = $derived(split(copy.wide, copy.secondSentenceLine.wide));
+	const narrow = $derived(split(copy.narrow, copy.secondSentenceLine.narrow));
 
-	const wordIndex = (lines: Copy['wide'], line: number, word: number) =>
+	const wordIndex = (lines: Lines, line: number, word: number) =>
 		lines.slice(0, line).reduce((sum, l) => sum + l.length, 0) + word;
 
 	$effect(() => {
-		if (!section || !stage || !video || !canvas) return;
+		if (!section || !stage || !band || !video) return;
 		const sectionEl = section;
 		const stageEl = stage;
+		const bandEl = band;
 		const videoEl = video;
 		const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-		const poster = new Image();
-		poster.crossOrigin = 'anonymous';
-		poster.src = film.poster;
-
-		const glass: Glass | null = createGlass(canvas, { video: videoEl, poster });
-		glassReady = !!glass;
 
 		const play = () => {
 			if (still) return;
@@ -48,48 +53,34 @@
 		const detachFilm = attachFilm(videoEl, play);
 		if (still) blocked = true;
 
-		let visible = true;
-		let edge = 0;
-		let horizonY = 0.33;
-
-		const layoutFilm = () => {
-			const width = stageEl.clientWidth;
+		const layout = () => {
 			const height = stageEl.clientHeight;
-			const target = width / height > 1 ? 0.31 : 0.4;
-			const frame = frameFilm(width, height, film, target);
+			const stageTop = stageEl.getBoundingClientRect().top;
+			const rect = bandEl.getBoundingClientRect();
+			const top = rect.top - stageTop;
+			const bottom = height - (rect.bottom - stageTop);
+			const line = top + rect.height / 2;
+			const frame = frameFilm(
+				stageEl.clientWidth,
+				height,
+				film,
+				(top + rect.height * 0.58) / height
+			);
 			positionY = frame.positionY;
-			horizon = horizonY = frame.horizon;
-			glass?.resize(width, height, frame.framing);
-		};
-
-		const syncLoop = () => {
-			if (!glass) return;
-			if (visible && edge < 1.02) glass.start();
-			else glass.stop();
+			geometry = { top, bottom, line, height, horizon: frame.horizon * height };
 		};
 
 		const measure = () => {
 			const rect = sectionEl.getBoundingClientRect();
 			const travel = Math.max(1, rect.height - innerHeight);
-			const scrolled = Math.min(1, Math.max(0, -rect.top / travel));
-			progress = scrolled;
-			const roll = Math.min(1, Math.max(0, (scrolled - 0.04) / 0.58));
-			edge = (roll < 0.5 ? 2 * roll * roll : 1 - Math.pow(-2 * roll + 2, 2) / 2) * 1.08;
-			glass?.setEdge(edge);
-			syncLoop();
+			const progress = Math.min(1, Math.max(0, -rect.top / travel));
+			const t = Math.min(1, progress / 0.62);
+			expand = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 		};
 
-		const entrance = () => {
-			if (!glass) return;
-			glass.beginIntro(still);
-			if (still) glass.clearBand(horizonY);
-			else setTimeout(() => glass.autoWipe(horizonY, 1700), 700);
-		};
-
-		layoutFilm();
+		layout();
 		measure();
-		if (document.documentElement.dataset.hartmannEntrance === 'ready') entrance();
-		else addEventListener('hartmann:entrance', entrance, { once: true });
+		document.fonts.ready.then(layout);
 
 		let frame = 0;
 		const onScroll = () => {
@@ -98,96 +89,95 @@
 				measure();
 			});
 		};
-		const onResize = () => {
-			layoutFilm();
+		const resizeObserver = new ResizeObserver(() => {
+			layout();
 			measure();
-		};
-		const wipeAt = (x: number, y: number) => {
-			if (!glass || edge >= 1.02) return;
-			glass.wipe(x, y - stageEl.getBoundingClientRect().top);
-		};
-		const onPointer = (event: PointerEvent) => {
-			if (event.pointerType !== 'touch') wipeAt(event.clientX, event.clientY);
-		};
-		const onTouch = (event: TouchEvent) => {
-			for (const touch of event.touches) wipeAt(touch.clientX, touch.clientY);
-		};
-
-		const observer = new IntersectionObserver(([entry]) => {
-			visible = entry.isIntersecting;
-			if (visible) play();
-			else videoEl.pause();
-			syncLoop();
 		});
-		observer.observe(sectionEl);
+		resizeObserver.observe(stageEl);
+
+		const visibility = new IntersectionObserver(([entry]) => {
+			if (entry.isIntersecting) play();
+			else videoEl.pause();
+		});
+		visibility.observe(sectionEl);
 
 		addEventListener('scroll', onScroll, { passive: true });
-		addEventListener('resize', onResize, { passive: true });
-		stageEl.addEventListener('pointermove', onPointer, { passive: true });
-		stageEl.addEventListener('touchmove', onTouch, { passive: true });
-		stageEl.addEventListener('touchstart', onTouch, { passive: true });
-
 		return () => {
 			cancelAnimationFrame(frame);
-			observer.disconnect();
 			removeEventListener('scroll', onScroll);
-			removeEventListener('resize', onResize);
-			removeEventListener('hartmann:entrance', entrance);
-			stageEl.removeEventListener('pointermove', onPointer);
-			stageEl.removeEventListener('touchmove', onTouch);
-			stageEl.removeEventListener('touchstart', onTouch);
+			resizeObserver.disconnect();
+			visibility.disconnect();
 			detachFilm();
-			glass?.destroy();
 		};
 	});
 </script>
 
-<section bind:this={section} class="hero" id="top" aria-label="Hartmann Software">
-	<div bind:this={stage} class="stage" data-layout={layout} style:--horizon={horizon}>
-		<video
-			bind:this={video}
-			class="film"
-			poster={film.poster}
-			crossorigin="anonymous"
-			muted
-			loop
-			playsinline
-			preload="auto"
-			disablepictureinpicture
-			disableremoteplayback
-			aria-hidden="true"
-			tabindex="-1"
-			style:object-position="50% {positionY * 100}%"
-		></video>
-		<div class="frost" class:hidden={glassReady} aria-hidden="true"></div>
-		<canvas bind:this={canvas} class="glass" aria-hidden="true"></canvas>
+{#snippet title(lines: Lines, offset: number)}
+	{#each lines as line, l (l)}
+		<span class="line">
+			{#each line as word, i (i)}
+				<span class="mask" class:italic={word.italic}
+					><span class="word" style:--i={offset + wordIndex(lines, l, i)}>{word.text}</span></span
+				>
+			{/each}
+		</span>
+	{/each}
+{/snippet}
 
-		<div class="frame" style:opacity={1 - textOut} style:translate="0 {textOut * -36}px">
+<section bind:this={section} class="hero" id="top" aria-labelledby="hero-title">
+	<h1 id="hero-title" class="sr-only">{copy.headline}</h1>
+	<div
+		bind:this={stage}
+		class="stage"
+		style:--band-top={geometry && `${geometry.top}px`}
+		style:--band-bottom={geometry && `${geometry.bottom}px`}
+		style:--line={geometry && `${geometry.line}px`}
+		style:--line-bottom={geometry && `${geometry.height - geometry.line}px`}
+		style:--horizon={geometry && `${geometry.horizon}px`}
+		style:--expand={expand}
+	>
+		<div class="film" style:background-position="50% {positionY * 100}%">
+			<video
+				bind:this={video}
+				poster={film.poster}
+				muted
+				loop
+				playsinline
+				preload="auto"
+				disablepictureinpicture
+				disableremoteplayback
+				aria-hidden="true"
+				tabindex="-1"
+				style:object-position="50% {positionY * 100}%"
+			></video>
+			<div class="grade" aria-hidden="true"></div>
+		</div>
+		<span class="hairline" aria-hidden="true"></span>
+
+		<div class="frame">
 			{#key locale}
-				<h1 class="headline" aria-label={copy.headline}>
-					{#each [{ lines: copy.wide, variant: 'wide' as const }, { lines: copy.narrow, variant: 'narrow' as const }] as { lines, variant } (variant)}
-						<span class="variant {variant}" aria-hidden="true">
-							{#each lines as line, l (l)}
-								<span class="line" class:second={l === copy.secondSentenceLine[variant]}>
-									{#each line as word, i (i)}
-										<span class="mask" class:italic={word.italic}
-											><span class="word" style:--i={wordIndex(lines, l, i)}>{word.text}</span
-											></span
-										>
-									{/each}
-								</span>
-							{/each}
-						</span>
-					{/each}
-				</h1>
+				<div class="inside">
+					<div class="title" aria-hidden="true">
+						<span class="wide">{@render title(wide.inside, 0)}</span>
+						<span class="narrow">{@render title(narrow.inside, 0)}</span>
+					</div>
+					<span class="scroll-line" aria-hidden="true"></span>
+				</div>
 			{/key}
 
-			<div class="lockup label">
-				<div class="name">
+			<div bind:this={band} class="band"></div>
+
+			<div class="outside">
+				{#key locale}
+					<div class="title" aria-hidden="true">
+						<span class="wide">{@render title(wide.outside, wide.inside.flat().length)}</span>
+						<span class="narrow">{@render title(narrow.outside, narrow.inside.flat().length)}</span>
+					</div>
+				{/key}
+				<p class="lockup label">
 					<b>{brand}</b>
 					<span>{copy.discipline}</span>
-				</div>
-				<span class="scroll-line" aria-hidden="true"></span>
+				</p>
 			</div>
 		</div>
 
@@ -202,76 +192,145 @@
 <style>
 	.hero {
 		position: relative;
-		height: 260lvh;
+		height: 230lvh;
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 
 	.stage {
+		--band-top: 30svh;
+		--band-bottom: 26svh;
+		--line: 52svh;
+		--line-bottom: 48svh;
+		--horizon: 56svh;
+		--title-size: min(5.4vw, 7.2svh, 104px);
 		position: sticky;
 		top: 0;
 		height: 100lvh;
 		overflow: hidden;
 		background: var(--paper);
-		touch-action: pan-y;
+		transition: --open 1.8s var(--ease-out) 0.75s;
 	}
 
-	.film,
-	.frost,
-	.glass {
+	:global(html[data-hartmann-entrance='ready']) .stage {
+		--open: 1;
+	}
+
+	.film {
+		position: absolute;
+		inset: 0;
+		background: var(--night) url('/media/images/helios-north-hero-poster.jpg') 50% 82% / cover
+			no-repeat;
+		clip-path: inset(
+			calc((var(--line) - (var(--line) - var(--band-top)) * var(--open)) * (1 - var(--expand))) 0
+				calc(
+					(var(--line-bottom) - (var(--line-bottom) - var(--band-bottom)) * var(--open)) *
+						(1 - var(--expand))
+				)
+				0
+		);
+	}
+
+	video,
+	.grade {
 		position: absolute;
 		inset: 0;
 		width: 100%;
 		height: 100%;
 	}
 
-	.film {
+	video {
 		object-fit: cover;
-		background: var(--paper);
+		transform: scale(1.12);
+		transform-origin: 50% var(--horizon);
+		transition: transform 3.4s var(--ease-out) 0.75s;
 	}
 
-	.frost {
-		--band: calc(var(--horizon) * 100%);
-		background: rgb(239 235 228 / 0.55);
-		-webkit-backdrop-filter: blur(18px) saturate(0.9);
-		backdrop-filter: blur(18px) saturate(0.9);
-		mask-image: linear-gradient(
-			#000 calc(var(--band) - 16%),
-			transparent calc(var(--band) - 7%),
-			transparent calc(var(--band) + 7%),
-			#000 calc(var(--band) + 16%)
-		);
+	:global(html[data-hartmann-entrance='ready']) video {
+		transform: none;
 	}
 
-	.frost.hidden {
-		display: none;
+	.grade {
+		background: linear-gradient(rgb(7 14 21 / 0.24), rgb(7 14 21 / 0.04) 48%, rgb(7 14 21 / 0.2));
+		pointer-events: none;
+	}
+
+	.hairline {
+		position: absolute;
+		top: var(--line);
+		left: 0;
+		right: 0;
+		height: 1px;
+		background: var(--ink);
+		opacity: 0;
+		transform: scaleX(0);
+		transform-origin: 0 50%;
+	}
+
+	:global(html[data-hartmann-entrance='ready']) .hairline {
+		animation: hairline 2.6s var(--ease-in-out) both;
+	}
+
+	@keyframes hairline {
+		0% {
+			opacity: 0.4;
+			transform: scaleX(0);
+		}
+		34% {
+			opacity: 0.4;
+			transform: scaleX(1);
+		}
+		58% {
+			opacity: 0.3;
+			transform: scaleX(1);
+		}
+		100% {
+			opacity: 0;
+			transform: scaleX(1);
+		}
 	}
 
 	.frame {
 		position: absolute;
 		inset: 0;
 		display: grid;
-		grid-template-rows: 1fr auto auto;
-		padding: 0 var(--gutter) clamp(20px, 3vw, 38px);
+		grid-template-rows: auto 1fr auto;
+		row-gap: clamp(18px, 3.4svh, 40px);
+		padding: calc(var(--header-pad) * 2 + 38px + 1.5svh) var(--gutter) clamp(20px, 3vw, 38px);
 		pointer-events: none;
 	}
 
-	[data-layout='above'] .frame {
-		grid-template-rows: auto 1fr auto;
-		padding-top: calc(var(--header-pad) * 2 + 38px + 3vh);
-	}
-
-	.headline {
-		grid-row: 2;
-		margin-bottom: clamp(34px, 8.5vh, 110px);
-		font: 400 clamp(40px, 6.6vw, 118px) / 1.02 var(--serif);
+	.title {
+		font: 400 var(--title-size) / 1.02 var(--serif);
 		letter-spacing: -0.014em;
 	}
 
-	[data-layout='above'] .headline {
-		grid-row: 1;
-		margin-bottom: 0;
+	.inside,
+	.outside {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		align-items: end;
+		column-gap: 24px;
+		opacity: calc(1 - var(--expand) * 2.4);
 	}
 
-	.variant {
+	.inside {
+		translate: 0 calc(var(--band-top) * var(--expand) * -1);
+	}
+
+	.outside {
+		translate: 0 calc(var(--band-bottom) * var(--expand));
+	}
+
+	.wide,
+	.narrow {
 		display: block;
 	}
 
@@ -284,10 +343,6 @@
 		gap: 0.25em;
 		width: max-content;
 		white-space: nowrap;
-	}
-
-	.line.second {
-		margin-top: 0.14em;
 	}
 
 	.mask {
@@ -309,23 +364,27 @@
 
 	:global(html[data-hartmann-entrance='ready']) .word {
 		transform: none;
-		transition: transform 1.5s var(--ease-out) calc(var(--i) * 60ms + 0.1s);
+		transition: transform 1.5s var(--ease-out) calc(var(--i) * 70ms + 1.15s);
 	}
 
 	.lockup {
-		grid-row: 3;
-		display: grid;
-		grid-template-columns: 1fr auto 1fr;
-		align-items: end;
+		justify-self: end;
+		text-align: right;
 		opacity: 0;
-		transition: opacity 1.4s var(--ease-out) 0.5s;
+		transition: opacity 1.6s var(--ease-out) 2s;
 	}
 
-	:global(html[data-hartmann-entrance='ready']) .lockup {
+	.scroll-line {
+		opacity: 0;
+		transition: opacity 1.6s var(--ease-out) 2s;
+	}
+
+	:global(html[data-hartmann-entrance='ready']) .lockup,
+	:global(html[data-hartmann-entrance='ready']) .scroll-line {
 		opacity: 1;
 	}
 
-	.name b {
+	.lockup b {
 		display: block;
 		margin-bottom: 0.5em;
 		font: 400 clamp(22px, 1.85vw, 28px) / 1 var(--serif);
@@ -333,13 +392,13 @@
 		text-transform: none;
 	}
 
-	.name span {
+	.lockup span {
 		opacity: 0.6;
 	}
 
 	.scroll-line {
 		position: relative;
-		justify-self: center;
+		justify-self: end;
 		width: 1px;
 		height: 48px;
 		overflow: hidden;
@@ -375,7 +434,7 @@
 	.play {
 		position: absolute;
 		right: var(--gutter);
-		bottom: 90px;
+		bottom: calc(var(--band-bottom) + 18px);
 		z-index: 8;
 		padding: 10px 16px;
 		border: 1px solid;
@@ -389,6 +448,10 @@
 	}
 
 	@media (width <= 759px) {
+		.stage {
+			--title-size: clamp(34px, 10.2vw, 56px);
+		}
+
 		.wide {
 			display: none;
 		}
@@ -397,16 +460,18 @@
 			display: block;
 		}
 
-		.headline {
-			font-size: clamp(40px, 11.2vw, 64px);
+		.outside {
+			grid-template-columns: 1fr;
+			row-gap: 18px;
 		}
 
 		.lockup {
-			grid-template-columns: 1fr auto;
+			justify-self: start;
+			text-align: left;
 		}
 
 		.scroll-line {
-			justify-self: end;
+			display: none;
 		}
 	}
 
@@ -417,6 +482,10 @@
 
 		.lockup {
 			opacity: 1;
+		}
+
+		video {
+			transform: none;
 		}
 	}
 </style>

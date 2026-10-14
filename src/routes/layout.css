@@ -8,6 +8,12 @@
 	--font-serif: var(--serif);
 }
 
+@property --open {
+	syntax: '<number>';
+	inherits: true;
+	initial-value: 0;
+}
+
 :root {
 	--paper: #efebe4;
 	--paper-shade: #d0cbc2;

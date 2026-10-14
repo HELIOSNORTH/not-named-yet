@@ -9,7 +9,7 @@ export const film = {
 	width: 2160,
 	height: 3840,
 	horizonY: 0.715,
-	startAt: 4
+	startAt: 6
 };
 
 export const socialImage = `${siteUrl}/media/images/hartmann_enterprise_software_ice_crystal_art-social.jpg`;
