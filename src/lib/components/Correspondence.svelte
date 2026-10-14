@@ -2,6 +2,7 @@
 	import { contact, type Copy } from '#lib/content.ts';
 	import { fitWidth } from '#lib/fit-width.ts';
 	import { reveal } from '#lib/reveal.ts';
+	import { sway } from '#lib/branch.ts';
 
 	let { copy }: { copy: Copy } = $props();
 
@@ -24,13 +25,29 @@
 
 <section class="correspondence" id="correspondence" tabindex="-1" aria-label="Contact">
 	<div class="room">
-		<div class="light" aria-hidden="true">
+		<div class="light" aria-hidden="true" {@attach reveal}>
 			<div class="window">
 				<div class="panes"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-				<svg class="branch" viewBox="0 0 600 520">
+				<svg
+					class="branch"
+					viewBox="0 0 600 520"
+					{@attach sway([
+						{ x: 610, y: 0 },
+						{ x: 480, y: 70 },
+						{ x: 330, y: 190 },
+						{ x: 110, y: 480 }
+					])}
+				>
 					<g>
 						{#each leaves as [rx, ry, x, y, angle], index (index)}
-							<ellipse {rx} {ry} transform="translate({x} {y}) rotate({angle})" />
+							<ellipse
+								{rx}
+								{ry}
+								data-x={x}
+								data-y={y}
+								data-angle={angle}
+								transform="translate({x} {y}) rotate({angle})"
+							/>
 						{/each}
 					</g>
 					<path d="M610 0C480 70 330 190 110 480" />
@@ -83,6 +100,12 @@
 		inset: 0;
 		overflow: hidden;
 		pointer-events: none;
+		opacity: 0;
+		transition: opacity 3.2s cubic-bezier(0.33, 0, 0.2, 1) 0.15s;
+	}
+
+	.light:global([data-revealed]) {
+		opacity: 1;
 	}
 
 	.window {
@@ -141,8 +164,6 @@
 		right: -4%;
 		width: 82.5%;
 		filter: blur(6px);
-		transform-origin: 92% 4%;
-		animation: sway 54.042s ease-in-out infinite;
 	}
 
 	.branch g {
@@ -153,38 +174,6 @@
 		fill: none;
 		stroke: var(--paper-shade);
 		stroke-width: 5;
-	}
-
-	@keyframes sway {
-		0%,
-		10.5251%,
-		21.9755%,
-		32.5007%,
-		33.0558%,
-		43.5809%,
-		55.4014%,
-		65.9265%,
-		66.6667%,
-		77.1918%,
-		88.8272%,
-		99.3524%,
-		100% {
-			transform: rotate(-2.5deg);
-		}
-		5.26257%,
-		15.7877%,
-		16.7129%,
-		27.2381%,
-		38.3183%,
-		48.8435%,
-		50.1388%,
-		60.6639%,
-		71.9292%,
-		82.4544%,
-		83.5646%,
-		94.0898% {
-			transform: rotate(3deg);
-		}
 	}
 
 	.body {

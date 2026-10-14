@@ -21,6 +21,16 @@ Owner judged the fogged-glass look risky. Ten alternative concepts were proposed
 - Header, veil, fonts, palette and the sunlight section unchanged from M2.
 - Verified in headless Chromium at 1440×900, 1280×720 and 390×844 (EN and DA), with a VP9 transcode of the real film.
 
+## M4 — Deeper title sequence + natural branch (2026-10-14) ✅
+
+Owner feedback: section 1 lacked wow and had a dead scroll zone; the branch swung too far and looked robotic.
+
+- Section 1: lit "dusk room" paper, live colour spill from the film, focus-pull intro, diagonal credits, scroll story
+  (bars retract → "Hartmann" title card → dawn dissolve), scroll-velocity playback ("drive"). Hero 300lvh, no idle
+  stretch.
+- Section 2: window light blooms in on arrival; branch is a spring-damped bend driven by noise wind with gusts and
+  per-leaf flutter (`src/lib/branch.ts`), replacing the 54 s CSS keyframe loop.
+
 ## Next (only when needed)
 
 - Check on real devices (iPhone Safari, Android Chrome, macOS Safari) and tune band proportions and intro timing.
