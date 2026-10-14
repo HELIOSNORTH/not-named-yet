@@ -3,27 +3,25 @@
 Marketing site for Hartmann Software (enterprise software architecture, Vejle, Denmark).
 English at `/`, Danish at `/da/`. Prerendered static files. Last reviewed 2026-10-13.
 
-## Concept: "Title Sequence" (chosen 2026-10-14, deepened 2026-10-14)
+## Concept: "Title Sequence" (chosen 2026-10-14)
 
 The hero film is Vejle Fjord at blue hour in winter, with Bølgen ("The Wave"), filmed from a moving car. The page
-plays like the opening of a Nordic film, and every scroll step changes something:
+opens like the title sequence of a Nordic film:
 
 1. **Loading veil** (unchanged from the previous site): paper screen, letter-spaced `HARTMANN`.
-2. **Dusk room**: the paper is a softly lit wall. An ink hairline draws at the horizon and opens like an iris into a
-   panoramic band of the film, which racks from soft to sharp focus. The film's live colours spill onto the paper
-   around it, the way a window tints a room at blue hour.
+2. **Opening**: on a softly lit paper wall, an ink hairline draws at the horizon and opens like an iris into a
+   panoramic band of the film, which racks from soft to sharp focus. A faint film-matched cool tint sits on the paper
+   around the band.
 3. **Credits**: "World-class software architecture _inside._" top-left, "Scandinavian design _outside._" bottom-right,
    the Hartmann lockup bottom-left.
-4. **Scroll, part 1**: the paper bars retract and carry their text away, and the film fills the screen while the
-   camera slowly pushes in. Scrolling also speeds the film up (you "drive"), and it eases back when you stop.
-5. **Scroll, part 2**: **title card**. "Hartmann" resolves out of a blur, large and white over Bølgen, with the
-   discipline tracking in beneath it.
-6. **Scroll, part 3**: **dawn**. The blue dusk dissolves into warm morning light.
-7. **Sunlight room** (from the previous site): its window light blooms in as it arrives, and the branch shadow
-   moves in physically simulated wind.
+4. **Scroll**: the two paper sheets slide away with their text, and the film fills the screen. The contact section then
+   rises over the film like a sheet of paper; the film drifts up more slowly (parallax) and dims under the sheet's
+   shadow. There is no idle stretch and no title card (owner: "stay tasteful").
+5. **Sunlight room** (from the previous site): its window light blooms in as it arrives, and the branch shadow
+   sways in physically simulated wind.
 
-Earlier concepts (Liquid Glass page, fogged-glass "The Window") were dropped after owner review; see
-`docs/milestones.md`.
+Earlier concepts (Liquid Glass page, fogged-glass "The Window", title card + dawn dissolve) were dropped after owner
+review; see `docs/milestones.md`.
 
 ## Stack
 

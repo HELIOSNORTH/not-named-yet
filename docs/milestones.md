@@ -31,6 +31,20 @@ Owner feedback: section 1 lacked wow and had a dead scroll zone; the branch swun
 - Section 2: window light blooms in on arrival; branch is a spring-damped bend driven by noise wind with gusts and
   per-leaf flutter (`src/lib/branch.ts`), replacing the 54 s CSS keyframe loop.
 
+## M5 — Smooth, tasteful transition + livelier branch (2026-10-14) ✅
+
+Owner feedback on M4: the "Hartmann" title card and dawn dissolve were not tasteful and didn't make sense; the video
+glitched, lagged and stopped while scrolling; the branch barely moved.
+
+- Removed the title card, dawn dissolve, scroll-driven playback rate and live colour-spill canvas.
+- Playback: stream capped at 1080p (the 4K level peaked at ~49 Mbit/s), bigger buffer, no rate changes. A watchdog
+  restarts the film if the browser pauses it unexpectedly. The band now opens with two paper sheets moved by
+  `transform` instead of a per-frame `clip-path` on the video. A headless scroll stress test showed continuous
+  playback at 1× with no pauses.
+- Transition: the contact section overlaps the hero by 100lvh and slides over the film (parallax + dim).
+- Branch: wind and spring retuned (tip travel about 100 px, irregular); leaves hinge at the stem, trail the branch
+  with their own springs, and flutter harder in gusts.
+
 ## Next (only when needed)
 
 - Check on real devices (iPhone Safari, Android Chrome, macOS Safari) and tune band proportions and intro timing.

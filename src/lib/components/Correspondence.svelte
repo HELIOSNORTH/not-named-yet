@@ -82,7 +82,10 @@
 <style>
 	.correspondence {
 		position: relative;
-		background: var(--night);
+		z-index: 2;
+		margin-top: -100lvh;
+		background: var(--paper-shade);
+		box-shadow: 0 -28px 90px rgb(13 22 32 / 0.28);
 	}
 
 	.room {

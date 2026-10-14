@@ -10,7 +10,7 @@ function hash(n: number) {
 function noise(t: number) {
 	const i = Math.floor(t);
 	const f = t - i;
-	const u = (1 - Math.cos(f * Math.PI)) / 2;
+	const u = f * f * (3 - 2 * f);
 	return (hash(i) * (1 - u) + hash(i + 1) * u) * 2 - 1;
 }
 
@@ -46,41 +46,68 @@ function smoothPath(points: Point[]) {
 	return d;
 }
 
+type Spring = { value: number; velocity: number };
+
+function spring(state: Spring, target: number, frequency: number, damping: number, dt: number) {
+	const omega = 2 * Math.PI * frequency;
+	const acceleration =
+		-omega * omega * (state.value - target) - 2 * damping * omega * state.velocity;
+	state.velocity += acceleration * dt;
+	state.value += state.velocity * dt;
+}
+
 export function sway(stem: [Point, Point, Point, Point]) {
 	return (svg: SVGSVGElement) => {
 		const path = svg.querySelector('path')!;
-		const leaves = [...svg.querySelectorAll('ellipse')].map((leaf, index) => {
-			const x = Number(leaf.dataset.x);
-			const y = Number(leaf.dataset.y);
-			return { leaf, x, y, angle: Number(leaf.dataset.angle), seed: index * 7.31 + 3.1 };
-		});
-
 		const rest = Array.from({ length: samples + 1 }, (_, i) => cubic(...stem, i / samples));
-		const anchors = leaves.map((leaf) => {
-			let best = 0;
-			let bestDistance = Infinity;
+
+		const leaves = [...svg.querySelectorAll('ellipse')].map((element, index) => {
+			const x = Number(element.dataset.x);
+			const y = Number(element.dataset.y);
+			let anchor = 0;
+			let nearest = Infinity;
 			rest.forEach((p, i) => {
-				const distance = Math.hypot(p.x - leaf.x, p.y - leaf.y);
-				if (distance < bestDistance) {
-					bestDistance = distance;
-					best = i;
+				const distance = Math.hypot(p.x - x, p.y - y);
+				if (distance < nearest) {
+					nearest = distance;
+					anchor = i;
 				}
 			});
-			return { index: best, offset: { x: leaf.x - rest[best].x, y: leaf.y - rest[best].y } };
+			return {
+				element,
+				anchor,
+				offset: { x: x - rest[anchor].x, y: y - rest[anchor].y },
+				angle: Number(element.dataset.angle),
+				seed: index * 7.31 + 3.1,
+				pace: 0.75 + hash(index + 11) * 0.6,
+				swing: { value: 0, velocity: 0 } as Spring
+			};
 		});
 
-		const omega = 2 * Math.PI * 0.42;
-		const damping = 0.22;
-		let bend = 0;
-		let velocity = 0;
-		let time = Math.random() * 1000;
+		const branch: Spring = { value: 0, velocity: 0 };
+		let time = hash(Date.now() % 1000) * 500;
 		let last = 0;
 		let frame = 0;
 
 		const wind = (t: number) => {
-			const breeze = noise(t * 0.16) * 0.022 + noise(t * 0.53 + 40) * 0.01;
-			const gust = Math.pow(Math.max(0, noise(t * 0.07 + 90)), 3) * 0.05;
-			return 0.012 + breeze + gust;
+			const breeze = noise(t * 0.23) * 0.15 + noise(t * 0.71 + 40) * 0.06;
+			const gust = Math.pow(Math.max(0, noise(t * 0.09 + 90)), 2) * 0.26;
+			return 0.05 + breeze + gust;
+		};
+
+		const step = (dt: number) => {
+			const target = wind(time);
+			spring(branch, target, 0.46, 0.17, dt);
+			const strength = Math.min(1, Math.abs(target) * 2.5 + Math.abs(branch.velocity) * 2);
+			for (const leaf of leaves) {
+				const flutter =
+					(noise(time * leaf.pace + leaf.seed) * 0.6 +
+						noise(time * leaf.pace * 2.3 + leaf.seed * 3) * 0.4) *
+					(0.1 + strength * 0.24);
+				const trail = -branch.velocity * 0.9;
+				spring(leaf.swing, flutter + trail, 1.1 + leaf.pace * 0.6, 0.35, dt);
+			}
+			time += dt;
 		};
 
 		const draw = () => {
@@ -88,7 +115,7 @@ export function sway(stem: [Point, Point, Point, Point]) {
 			const angles = [0];
 			for (let i = 1; i < rest.length; i++) {
 				const s = i / samples;
-				const angle = bend * s * s;
+				const angle = branch.value * s * s;
 				const segment = rotate(
 					{ x: rest[i].x - rest[i - 1].x, y: rest[i].y - rest[i - 1].y },
 					angle
@@ -98,39 +125,30 @@ export function sway(stem: [Point, Point, Point, Point]) {
 			}
 			path.setAttribute('d', smoothPath(shape));
 
-			const strength = Math.min(1, Math.abs(velocity) * 6 + Math.abs(bend) * 8);
-			leaves.forEach((leaf, i) => {
-				const { index, offset } = anchors[i];
-				const angle = angles[index];
-				const position = rotate(offset, angle);
-				const flutter = noise(time * (0.7 + (i % 3) * 0.18) + leaf.seed) * (2 + strength * 4);
-				const turn = 1 - Math.abs(noise(time * 0.45 + leaf.seed * 2)) * (0.05 + strength * 0.1);
-				const x = shape[index].x + position.x;
-				const y = shape[index].y + position.y;
-				const degrees = leaf.angle + (angle * 180) / Math.PI + flutter;
-				leaf.leaf.setAttribute(
+			for (const leaf of leaves) {
+				const turn = leaf.swing.value;
+				const angle = angles[leaf.anchor] + turn;
+				const position = rotate(leaf.offset, angle);
+				const x = shape[leaf.anchor].x + position.x;
+				const y = shape[leaf.anchor].y + position.y;
+				const degrees = leaf.angle + (angle * 180) / Math.PI;
+				const flip = 1 - Math.min(0.3, Math.abs(turn) * 1.2);
+				leaf.element.setAttribute(
 					'transform',
-					`translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${degrees.toFixed(2)}) scale(${turn.toFixed(3)} 1)`
+					`translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${degrees.toFixed(2)}) scale(1 ${flip.toFixed(3)})`
 				);
-			});
-		};
-
-		const step = (dt: number) => {
-			const target = wind(time);
-			const acceleration = -omega * omega * (bend - target) - 2 * damping * omega * velocity;
-			velocity += acceleration * dt;
-			bend += velocity * dt;
-			time += dt;
+			}
 		};
 
 		const tick = (now: number) => {
 			const dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016;
 			last = now;
-			for (let remaining = dt; remaining > 0; remaining -= 0.01) step(Math.min(0.01, remaining));
+			for (let remaining = dt; remaining > 0; remaining -= 0.008) step(Math.min(0.008, remaining));
 			draw();
 			frame = requestAnimationFrame(tick);
 		};
 
+		for (let i = 0; i < 400; i++) step(0.02);
 		draw();
 		if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 

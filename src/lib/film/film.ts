@@ -1,5 +1,7 @@
 import { film } from '#lib/content.ts';
 
+const maxStreamWidth = 1080;
+
 export function attachFilm(video: HTMLVideoElement, play: () => void) {
 	let destroyed = false;
 	let cleanup = () => {};
@@ -24,14 +26,17 @@ export function attachFilm(video: HTMLVideoElement, play: () => void) {
 				if (destroyed) return;
 				if (!Hls.isSupported()) return useMp4();
 				const hls = new Hls({
-					maxBufferLength: 12,
+					maxBufferLength: 20,
+					backBufferLength: 10,
 					capLevelToPlayerSize: false,
 					startPosition: film.startAt
 				});
 				hls.on(Hls.Events.MANIFEST_PARSED, () => {
-					const needed = neededWidth(video);
-					const index = hls.levels.findIndex((level) => level.width >= needed);
-					hls.autoLevelCapping = index === -1 ? hls.levels.length - 1 : index;
+					let cap = 0;
+					hls.levels.forEach((level, index) => {
+						if (level.width <= maxStreamWidth && level.width >= hls.levels[cap].width) cap = index;
+					});
+					hls.autoLevelCapping = cap;
 				});
 				hls.on(Hls.Events.ERROR, (_event, data) => {
 					if (!data.fatal) return;
@@ -50,9 +55,4 @@ export function attachFilm(video: HTMLVideoElement, play: () => void) {
 		video.removeEventListener('canplay', play);
 		cleanup();
 	};
-}
-
-function neededWidth(video: HTMLVideoElement) {
-	const scale = Math.max(video.clientWidth / film.width, video.clientHeight / film.height);
-	return film.width * scale * Math.min(devicePixelRatio || 1, 2) * 0.85;
 }
